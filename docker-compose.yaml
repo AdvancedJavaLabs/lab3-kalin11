@@ -1,0 +1,82 @@
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:latest
+    container_name: namenode
+    environment:
+      - CLUSTER_NAME=hadoop_namenode
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - HDFS_CONF_dfs_replication=1
+      - HDFS_CONF_dfs_permissions_enabled=false
+    ports:
+      - "9870:9870"   # Web UI HDFS
+      - "9000:9000"   # HDFS Service
+      - "8020:9000"
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  datanode:
+    image: bde2020/hadoop-datanode:latest
+    container_name: datanode
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - HDFS_CONF_dfs_datanode_data_dir=file:///hadoop/dfs/data
+    volumes:
+      - datanode_data:/hadoop/dfs/data
+    depends_on:
+      namenode:
+        condition: service_healthy
+    ports:
+      - "9864:9864"
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:latest
+    container_name: resourcemanager
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - YARN_CONF_yarn_resourcemanager_hostname=resourcemanager
+      - YARN_CONF_yarn_nodemanager_aux-services=mapreduce_shuffle
+      - YARN_CONF_yarn_resourcemanager_address=resourcemanager:8032
+      - YARN_CONF_yarn_resourcemanager_scheduler_address=resourcemanager:8030
+      - YARN_CONF_yarn_resourcemanager_resource_tracker_address=resourcemanager:8031
+      - YARN_CONF_yarn_resourcemanager_admin_address=resourcemanager:8033
+      - YARN_CONF_yarn_resourcemanager_webapp_address=0.0.0.0:8088
+      - HADOOP_CONF_DIR=/etc/hadoop
+    ports:
+      - "8088:8088"   # YARN Web UI
+      - "8032:8032"   # ResourceManager scheduler
+      - "8030:8030"   # ResourceManager tracker
+      - "8031:8031"   # ResourceManager admin
+    depends_on:
+      - namenode
+      - datanode
+
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:latest
+    container_name: nodemanager
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - YARN_CONF_yarn_resourcemanager_hostname=resourcemanager
+      - YARN_CONF_yarn_nodemanager_resource_memory_mb=4096
+      - YARN_CONF_yarn_nodemanager_resource_cpu_vcores=4
+      - YARN_CONF_yarn_nodemanager_aux-services=mapreduce_shuffle
+      - YARN_CONF_yarn_nodemanager_address=0.0.0.0:8041
+      - YARN_CONF_yarn_nodemanager_webapp_address=0.0.0.0:8042
+      - YARN_CONF_yarn_resourcemanager_address=resourcemanager:8032
+      - YARN_CONF_yarn_resourcemanager_scheduler_address=resourcemanager:8030
+      - YARN_CONF_yarn_resourcemanager_resource_tracker_address=resourcemanager:8031
+      - YARN_CONF_yarn_resourcemanager_admin_address=resourcemanager:8033
+      - HADOOP_CONF_DIR=/etc/hadoop
+    ports:
+      - "8042:8042"   # NodeManager Web UI
+    depends_on:
+      - resourcemanager
+      - datanode
+
+volumes:
+  namenode_data:
+  datanode_data:
